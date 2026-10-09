@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Routine Tracker</title>
+<style>
+:root {
+  --bg: #f6f7fb; --card: #ffffff; --text: #1d2130; --muted: #6b7185; --line: #e3e6ef;
+  --accent: #4f6bed; --good: #1f9d63; --warn: #d98a00; --bad: #d64545; --chip: #eef1fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12141b; --card: #1b1e28; --text: #e8eaf2; --muted: #9298ab; --line: #2a2e3b;
+    --accent: #7d93ff; --good: #3cc488; --warn: #f0a92c; --bad: #ff6b6b; --chip: #252a3a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 18px 16px 8px; max-width: 760px; margin: 0 auto; }
+header h1 { margin: 0; font-size: 22px; }
+header p { margin: 2px 0 0; color: var(--muted); }
+nav { display: flex; gap: 6px; max-width: 760px; margin: 10px auto 0; padding: 0 16px; overflow-x: auto; }
+nav button { flex: 1; min-width: 80px; }
+main { max-width: 760px; margin: 0 auto; padding: 12px 16px 60px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.card h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+.muted { color: var(--muted); font-size: 13px; }
+button { font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--text);
+  border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.done { background: var(--good); color: #fff; border-color: var(--good); }
+button.danger { color: var(--bad); }
+button.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; }
+textarea { width: 100%; min-height: 54px; resize: vertical; }
+.bar { height: 8px; background: var(--chip); border-radius: 99px; overflow: hidden; flex: 1; min-width: 120px; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.bar.good > i { background: var(--good); } .bar.bad > i { background: var(--bad); } .bar.warn > i { background: var(--warn); }
+.big { font-size: 26px; font-weight: 700; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 8px 0; }
+.stat { background: var(--chip); border-radius: 10px; padding: 8px 10px; }
+.stat b { display: block; font-size: 18px; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); font-weight: 500; }
+.badge.good { color: var(--good); } .badge.bad { color: var(--bad); }
+.tip { background: var(--chip); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 14px; }
+.block { display: grid; grid-template-columns: 110px 1fr auto; gap: 10px; align-items: center; padding: 8px 6px;
+  border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; }
+.block.now { background: var(--chip); border-radius: 8px; border-left: 3px solid var(--accent); }
+.block .t { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.edit-block { display: grid; grid-template-columns: 90px 90px 1fr 120px auto; gap: 6px; margin-bottom: 6px; }
+table.week { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.week th, table.week td { text-align: center; padding: 6px 2px; border-bottom: 1px solid var(--line); }
+table.week td:first-child, table.week th:first-child { text-align: left; }
+.dot { display: inline-block; width: 22px; height: 22px; border-radius: 6px; line-height: 22px; font-size: 11px; color: #fff; }
+.dot.ok { background: var(--good); } .dot.no { background: var(--bad); opacity: .75; } .dot.na { background: var(--chip); color: var(--muted); }
+.datebar { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 10px; }
+@media (max-width: 560px) {
+  .block { grid-template-columns: 1fr auto; }
+  .block .t { grid-column: 1 / -1; }
+  .edit-block { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Daily Routine Tracker</h1>
+  <p id="subtitle"></p>
+</header>
+<nav>
+  <button class="tab active" data-view="today">Today</button>
+  <button class="tab" data-view="plan">Schedule</button>
+  <button class="tab" data-view="week">Progress</button>
+  <button class="tab" data-view="settings">Settings</button>
+</nav>
+<main id="app"></main>
+
+<script>
+// ---------- storage ----------
+const KEY = 'routine-tracker-v1';
+const todayStr = (d = new Date()) => {
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+};
+const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return todayStr(d); };
+
+const DEFAULT_STATE = () => ({
+  created: todayStr(),
+  smoking: { quitAt: new Date().toISOString(), lastSmokeAt: null, cigsPerDay: 10, packPrice: 300, packSize: 20, currency: '₹' },
+  habits: [
+    { id: 'smoke', name: 'No smoking', icon: '🚭', type: 'quit' },
+    { id: 'gym', name: 'Gym', icon: '🏋️', type: 'check', perWeek: 4 },
+    { id: 'cook', name: 'Cook a meal', icon: '🍳', type: 'check', perWeek: 7 },
+    { id: 'learn', name: 'Upskilling', icon: '📚', type: 'minutes', goal: 60, step: 15 },
+    { id: 'game', name: 'Valorant', icon: '🎮', type: 'limit', max: 90, step: 35, stepLabel: '+1 game' },
+  ],
+  schedule: [
+    { start: '06:30', end: '07:00', title: 'Wake up, water, short walk (no cigarette)', habit: 'smoke' },
+    { start: '07:00', end: '08:15', title: 'Gym', habit: 'gym' },
+    { start: '08:15', end: '09:00', title: 'Shower + breakfast', habit: '' },
+    { start: '09:00', end: '18:00', title: 'Work / college', habit: '' },
+    { start: '18:30', end: '19:30', title: 'Cook dinner', habit: 'cook' },
+    { start: '19:30', end: '20:30', title: 'Upskilling (focused, phone away)', habit: 'learn' },
+    { start: '21:00', end: '22:30', title: 'Valorant (max ~2–3 games)', habit: 'game' },
+    { start: '22:30', end: '23:00', title: 'Wind down, plan tomorrow', habit: '' },
+    { start: '23:00', end: '06:30', title: 'Sleep', habit: '' },
+  ],
+  log: {},
+});
+
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY)) || DEFAULT_STATE(); } catch { state = DEFAULT_STATE(); }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+
+let view = 'today';
+let day = todayStr();
+
+const habit = id => state.habits.find(h => h.id === id);
+const entry = (d, id) => (state.log[d] || {})[id];
+const setEntry = (d, id, v) => { (state.log[d] ||= {})[id] = v; save(); render(); };
+
+// ---------- habit logic ----------
+// Returns true (success), false (missed) or null (no data / not applicable).
+function dayResult(h, d) {
+  if (d < state.created || d > todayStr()) return null;
+  const v = entry(d, h.id);
+  switch (h.type) {
+    case 'check': return v ? true : (d === todayStr() ? null : false);
+    case 'minutes': return (v || 0) >= h.goal ? true : (d === todayStr() ? null : false);
+    case 'limit': return (v || 0) <= h.max;
+    case 'quit': return !(v && v.cigs > 0);
+  }
+}
+
+function streak(h) {
+  let d = todayStr(), n = 0;
+  if (dayResult(h, d) !== true) d = addDays(d, -1);
+  while (dayResult(h, d) === true) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+function weekCount(h, ref = day) {
+  const dt = new Date(ref + 'T12:00:00');
+  const monday = addDays(ref, -((dt.getDay() + 6) % 7));
+  let n = 0;
+  for (let i = 0; i < 7; i++) if (entry(addDays(monday, i), h.id)) n++;
+  return n;
+}
+
+// ---------- smoking ----------
+const TIPS = [
+  'Delay: cravings peak and fade within 3–5 minutes. Set a timer and wait it out.',
+  'Deep breathe: 4 seconds in, hold 4, out for 6. Repeat 5 times.',
+  'Drink a full glass of cold water slowly.',
+  'Do something with your hands — dishes, a quick pushup set, or one Deathmatch.',
+  'Change location. Cravings are tied to places — move to a different room.',
+  'Chew gum, eat a carrot or a few nuts.',
+  'Text a friend or say out loud why you are quitting.',
+  'Remember: every craving you beat makes the next one weaker.',
+];
+const MILESTONES = [
+  [20 / 60 / 24, 'Heart rate and blood pressure drop'],
+  [0.5, 'Carbon monoxide in your blood back to normal'],
+  [2, 'Smell and taste start improving'],
+  [3, 'Nicotine is out of your body — cravings peak, then ease'],
+  [14, 'Circulation and lung function improve'],
+  [30, 'Coughing and shortness of breath decrease'],
+  [90, 'Lung function up to 30% better'],
+  [365, 'Heart disease risk is half that of a smoker'],
+];
+
+function fmtDuration(ms) {
+  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+  return d > 0 ? `${d}d ${h}h` : `${h}h ${m % 60}m`;
+}
+
+function smokingCard(d) {
+  const s = state.smoking, now = Date.now();
+  const since = Math.max(new Date(s.quitAt).getTime(), s.lastSmokeAt ? new Date(s.lastSmokeAt).getTime() : 0);
+  const quitDays = (now - new Date(s.quitAt).getTime()) / 86400000;
+  const smokedSinceQuit = Object.values(state.log).reduce((a, e) => a + ((e.smoke && e.smoke.cigs) || 0), 0);
+  const avoided = Math.max(0, Math.floor(quitDays * s.cigsPerDay - smokedSinceQuit));
+  const saved = Math.round(avoided * s.packPrice / s.packSize);
+  const e = entry(d, 'smoke') || { cigs: 0, cravings: 0 };
+  const freeDays = (now - since) / 86400000;
+  const next = MILESTONES.find(([days]) => days > freeDays);
+  const tip = TIPS[(e.cravings || 0) % TIPS.length];
+  return `
+  <div class="card">
+    <h2>🚭 Quit smoking <span class="badge good">${streak(habit('smoke'))} day streak</span></h2>
+    <div class="muted">Smoke-free for</div>
+    <div class="big">${fmtDuration(now - since)}</div>
+    <div class="stats">
+      <div class="stat"><b>${avoided}</b><span class="muted">cigarettes avoided</span></div>
+      <div class="stat"><b>${s.currency}${saved.toLocaleString()}</b><span class="muted">money saved</span></div>
+      <div class="stat"><b>${e.cravings || 0}</b><span class="muted">cravings beaten ${d === todayStr() ? 'today' : ''}</span></div>
+      <div class="stat"><b>${e.cigs || 0}</b><span class="muted">smoked ${d === todayStr() ? 'today' : ''}</span></div>
+    </div>
+    ${next ? `<div class="muted">Next milestone: <b>${next[1]}</b> in ${fmtDuration((next[0] - freeDays) * 86400000)}</div>` : ''}
+    <div class="row" style="margin-top:10px">
+      <button class="primary" onclick="craving()">💪 I beat a craving</button>
+      <button class="danger" onclick="smoked()">I smoked one</button>
+      ${e.cigs ? `<button onclick="unsmoke()">Undo</button>` : ''}
+    </div>
+    <div class="tip">${e.cigs ? 'A slip is not a fail. Log it, notice the trigger, and keep going — the next cigarette is the one that matters.' : tip}</div>
+  </div>`;
+}
+
+window.craving = () => { const e = { cigs: 0, cravings: 0, ...entry(day, 'smoke') }; e.cravings++; setEntry(day, 'smoke', e); };
+window.smoked = () => {
+  const e = { cigs: 0, cravings: 0, ...entry(day, 'smoke') }; e.cigs++;
+  if (day === todayStr()) state.smoking.lastSmokeAt = new Date().toISOString();
+  setEntry(day, 'smoke', e);
+};
+window.unsmoke = () => { const e = { ...entry(day, 'smoke') }; e.cigs = Math.max(0, e.cigs - 1); setEntry(day, 'smoke', e); };
+
+// ---------- habit cards ----------
+function habitCard(h, d) {
+  const v = entry(d, h.id);
+  if (h.type === 'check') {
+    const wk = weekCount(h, d);
+    const goalNote = h.perWeek < 7 ? `${wk}/${h.perWeek} this week` : `${streak(h)} day streak`;
+    return `<div class="card"><div class="row spread">
+      <h2>${h.icon} ${h.name} <span class="badge ${wk >= h.perWeek ? 'good' : ''}">${goalNote}</span></h2>
+      <button class="${v ? 'done' : 'primary'}" onclick="toggle('${h.id}')">${v ? '✓ Done' : 'Mark done'}</button>
+    </div></div>`;
+  }
+  if (h.type === 'minutes') {
+    const m = (v && v.min) || 0, pct = Math.min(100, m / h.goal * 100);
+    return `<div class="card">
+      <div class="row spread"><h2>${h.icon} ${h.name} <span class="badge good">${streak(h)} day streak</span></h2>
+      <span class="muted">${m} / ${h.goal} min</span></div>
+      <div class="row"><div class="bar ${m >= h.goal ? 'good' : ''}"><i style="width:${pct}%"></i></div>
+        <button onclick="addMin('${h.id}', -${h.step})">−${h.step}</button>
+        <button class="primary" onclick="addMin('${h.id}', ${h.step})">+${h.step} min</button></div>
+      <textarea placeholder="What did you learn today?" onchange="setNote('${h.id}', this.value)">${(v && v.note) || ''}</textarea>
+    </div>`;
+  }
+  if (h.type === 'limit') {
+    const m = (v && v.min) || 0, pct = Math.min(100, m / h.max * 100);
+    const cls = m > h.max ? 'bad' : m > h.max * 0.75 ? 'warn' : 'good';
+    const msg = m > h.max ? `Over your limit by ${m - h.max} min — call it a night.`
+      : m >= h.max * 0.75 ? 'Almost at your limit — make this the last game.' : `${h.max - m} min left today`;
+    return `<div class="card">
+      <div class="row spread"><h2>${h.icon} ${h.name} <span class="badge ${m > h.max ? 'bad' : 'good'}">limit ${h.max} min</span></h2>
+      <span class="muted">${m} min played</span></div>
+      <div class="row"><div class="bar ${cls}"><i style="width:${pct}%"></i></div>
+        <button onclick="addMin('${h.id}', -15)">−15</button>
+        <button onclick="addMin('${h.id}', 15)">+15 min</button>
+        <button class="primary" onclick="addMin('${h.id}', ${h.step})">${h.stepLabel || '+' + h.step}</button></div>
+      <div class="muted" style="margin-top:6px;color:var(--${m > h.max ? 'bad' : 'muted'})">${msg}</div>
+    </div>`;
+  }
+  return '';
+}
+
+window.toggle = id => setEntry(day, id, !entry(day, id));
+window.addMin = (id, n) => { const e = { min: 0, ...entry(day, id) }; e.min = Math.max(0, e.min + n); setEntry(day, id, e); };
+window.setNote = (id, t) => { const e = { min: 0, ...entry(day, id) }; e.note = t; (state.log[day] ||= {})[id] = e; save(); };
+
+// ---------- schedule ----------
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+function currentBlockIndex() {
+  const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
+  return state.schedule.findIndex(b => {
+    const s = toMin(b.start), e = toMin(b.end);
+    return s <= e ? m >= s && m < e : m >= s || m < e;
+  });
+}
+const sorted = () => [...state.schedule].sort((a, b) => toMin(a.start) - toMin(b.start));
+
+function scheduleList(compact) {
+  const cur = state.schedule[currentBlockIndex()];
+  return sorted().map(b => {
+    const h = b.habit && habit(b.habit), isNow = b === cur && day === todayStr();
+    const ok = h && dayResult(h, day) === true;
+    return `<div class="block ${isNow ? 'now' : ''}">
+      <span class="t">${b.start} – ${b.end}${isNow ? ' · now' : ''}</span>
+      <span>${h ? h.icon + ' ' : ''}${b.title}</span>
+      <span>${h && h.type !== 'quit' ? (ok ? '✅' : '⬜') : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+function totals() {
+  const tot = {};
+  for (const b of state.schedule) {
+    let len = toMin(b.end) - toMin(b.start); if (len < 0) len += 1440;
+    const k = b.habit ? habit(b.habit)?.name || 'Other' : b.title.split(/[ ,(/]/)[0];
+    tot[k] = (tot[k] || 0) + len;
+  }
+  return Object.entries(tot).sort((a, b) => b[1] - a[1]);
+}
+
+// ---------- views ----------
+function viewToday() {
+  const cur = state.schedule[currentBlockIndex()];
+  const doneCount = state.habits.filter(h => dayResult(h, day) === true).length;
+  return `
+  <div class="datebar">
+    <button onclick="shiftDay(-1)">◀</button>
+    <b>${day === todayStr() ? 'Today' : new Date(day + 'T12:00:00').toDateString()}</b>
+    <button onclick="shiftDay(1)" ${day >= todayStr() ? 'disabled' : ''}>▶</button>
+  </div>
+  ${day === todayStr() && cur ? `<div class="card"><div class="muted">Right now (${cur.start}–${cur.end})</div><div class="big" style="font-size:20px">${cur.title}</div></div>` : ''}
+  <div class="card"><div class="row spread"><b>Daily score</b><span class="muted">${doneCount} / ${state.habits.length} habits on track</span></div>
+    <div class="bar good" style="margin-top:6px"><i style="width:${doneCount / state.habits.length * 100}%"></i></div></div>
+  ${state.habits.map(h => h.type === 'quit' ? smokingCard(day) : habitCard(h, day)).join('')}
+  <div class="card"><h2>🗓️ Today's plan</h2>${scheduleList()}</div>`;
+}
+window.shiftDay = n => { const d = addDays(day, n); if (d <= todayStr()) { day = d; render(); } };
+
+function viewPlan() {
+  const opts = id => `<option value="">— none —</option>` + state.habits.map(h =>
+    `<option value="${h.id}" ${h.id === id ? 'selected' : ''}>${h.icon} ${h.name}</option>`).join('');
+  const rows = state.schedule.map((b, i) => `<div class="edit-block">
+      <input type="time" value="${b.start}" onchange="editBlock(${i}, 'start', this.value)">
+      <input type="time" value="${b.end}" onchange="editBlock(${i}, 'end', this.value)">
+      <input value="${b.title.replace(/"/g, '&quot;')}" onchange="editBlock(${i}, 'title', this.value)">
+      <select onchange="editBlock(${i}, 'habit', this.value)">${opts(b.habit)}</select>
+      <button class="danger" onclick="delBlock(${i})">✕</button></div>`).join('');
+  return `
+  <div class="card"><h2>⏱️ Where your day goes</h2>
+    ${totals().map(([k, m]) => `<div class="row"><span style="width:120px">${k}</span>
+      <div class="bar"><i style="width:${m / 1440 * 100}%"></i></div><span class="muted" style="width:60px;text-align:right">${(m / 60).toFixed(1)} h</span></div>`).join('')}
+  </div>
+  <div class="card"><h2>✏️ Edit your daily schedule</h2>
+    <div class="muted" style="margin-bottom:8px">Link a block to a habit so you can see it ticked off in Today.</div>
+    ${rows}
+    <div class="row"><button class="primary" onclick="addBlock()">+ Add block</button>
+    <button onclick="resetSchedule()">Reset to suggested</button></div>
+  </div>
+  <div class="card"><h2>💡 Time-management tips</h2>
+    <div class="tip">Gym in the morning: it's the habit most likely to be skipped if left for the evening, and exercise blunts cigarette cravings for hours.</div>
+    <div class="tip">Upskilling before gaming: do the hard thing first, use Valorant as the reward.</div>
+    <div class="tip">Cap gaming by games, not hours — one comp match is ~35–40 min. Decide the number before you queue.</div>
+    <div class="tip">Cooking is a great craving-killer after dinner time — hands and mind busy. Batch-cook on Sundays to save weekday time.</div>
+  </div>`;
+}
+window.editBlock = (i, k, v) => { state.schedule[i][k] = v; save(); render(); };
+window.delBlock = i => { state.schedule.splice(i, 1); save(); render(); };
+window.addBlock = () => { state.schedule.push({ start: '12:00', end: '13:00', title: 'New block', habit: '' }); save(); render(); };
+window.resetSchedule = () => { if (confirm('Replace your schedule with the suggested one?')) { state.schedule = DEFAULT_STATE().schedule; save(); render(); } };
+
+function viewWeek() {
+  const days = Array.from({ length: 14 }, (_, i) => addDays(todayStr(), i - 13));
+  const head = days.map(d => `<th>${'SMTWTFS'[new Date(d + 'T12:00:00').getDay()]}<br><span class="muted">${+d.slice(8)}</span></th>`).join('');
+  const rows = state.habits.map(h => `<tr><td>${h.icon} ${h.name}</td>${days.map(d => {
+    const r = dayResult(h, d);
+    return `<td><span class="dot ${r === true ? 'ok' : r === false ? 'no' : 'na'}">${r === true ? '✓' : r === false ? '✕' : ''}</span></td>`;
+  }).join('')}</tr>`).join('');
+  const sum = (id, f) => days.slice(7).reduce((a, d) => a + f(entry(d, id)), 0);
+  const learnMin = sum('learn', v => (v && v.min) || 0), gameMin = sum('game', v => (v && v.min) || 0);
+  const cravings = sum('smoke', v => (v && v.cravings) || 0), cigs = sum('smoke', v => (v && v.cigs) || 0);
+  return `
+  <div class="card"><h2>📊 Last 7 days</h2>
+    <div class="stats">
+      <div class="stat"><b>${(learnMin / 60).toFixed(1)} h</b><span class="muted">upskilling</span></div>
+      <div class="stat"><b>${(gameMin / 60).toFixed(1)} h</b><span class="muted">Valorant</span></div>
+      <div class="stat"><b>${sum('gym', v => v ? 1 : 0)}</b><span class="muted">gym sessions</span></div>
+      <div class="stat"><b>${sum('cook', v => v ? 1 : 0)}</b><span class="muted">meals cooked</span></div>
+      <div class="stat"><b>${cravings}</b><span class="muted">cravings beaten</span></div>
+      <div class="stat"><b>${cigs}</b><span class="muted">cigarettes</span></div>
+    </div>
+    ${learnMin < gameMin ? `<div class="tip">You gamed more than you studied this week. Try swapping one gaming session for learning.</div>` : learnMin > 0 ? `<div class="tip">Learning ≥ gaming this week — nice balance.</div>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto"><h2>🔥 Last 14 days</h2>
+    <table class="week"><tr><th></th>${head}</tr>${rows}</table>
+  </div>
+  <div class="card"><h2>Streaks</h2>
+    ${state.habits.map(h => `<div class="row spread"><span>${h.icon} ${h.name}</span><b>${streak(h)} day${streak(h) === 1 ? "" : "s"}</b></div>`).join('')}
+  </div>`;
+}
+
+function viewSettings() {
+  const s = state.smoking;
+  const quitLocal = new Date(new Date(s.quitAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const goalInput = h => h.type === 'check' ? `<label>times / week <input type="number" min="1" max="7" value="${h.perWeek}" onchange="setHabit('${h.id}','perWeek',+this.value)" style="width:70px"></label>`
+    : h.type === 'minutes' ? `<label>daily goal (min) <input type="number" min="5" step="5" value="${h.goal}" onchange="setHabit('${h.id}','goal',+this.value)" style="width:80px"></label>`
+    : h.type === 'limit' ? `<label>daily max (min) <input type="number" min="0" step="5" value="${h.max}" onchange="setHabit('${h.id}','max',+this.value)" style="width:80px"></label>` : '';
+  return `
+  <div class="card"><h2>🚭 Smoking</h2>
+    <div class="row"><label>Quit date <input type="datetime-local" value="${quitLocal}" onchange="setSmoke('quitAt', new Date(this.value).toISOString())"></label></div>
+    <div class="row" style="margin-top:8px">
+      <label>Cigs/day before <input type="number" value="${s.cigsPerDay}" onchange="setSmoke('cigsPerDay', +this.value)" style="width:70px"></label>
+      <label>Pack price <input type="number" value="${s.packPrice}" onchange="setSmoke('packPrice', +this.value)" style="width:80px"></label>
+      <label>Pack size <input type="number" value="${s.packSize}" onchange="setSmoke('packSize', +this.value)" style="width:70px"></label>
+      <label>Currency <input value="${s.currency}" onchange="setSmoke('currency', this.value)" style="width:50px"></label>
+    </div></div>
+  <div class="card"><h2>🎯 Goals</h2>
+    ${state.habits.filter(h => h.type !== 'quit').map(h => `<div class="row spread" style="margin-bottom:6px"><span>${h.icon} ${h.name}</span>${goalInput(h)}</div>`).join('')}
+  </div>
+  <div class="card"><h2>💾 Your data</h2>
+    <div class="muted">Saved only in this browser. Export a backup to move it to another device.</div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="exportData()">Export backup</button>
+      <label><button onclick="this.nextElementSibling.click()">Import backup</button><input type="file" accept=".json" hidden onchange="importData(this.files[0])"></label>
+      <button class="danger" onclick="resetAll()">Reset everything</button>
+    </div></div>`;
+}
+window.setSmoke = (k, v) => { state.smoking[k] = v; save(); render(); };
+window.setHabit = (id, k, v) => { habit(id)[k] = v; save(); render(); };
+window.exportData = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+  a.download = `routine-backup-${todayStr()}.json`; a.click();
+};
+window.importData = f => f && f.text().then(t => { try { state = JSON.parse(t); save(); render(); alert('Imported!'); } catch { alert('Invalid file'); } });
+window.resetAll = () => { if (confirm('Delete all data and start over?')) { state = DEFAULT_STATE(); save(); render(); } };
+
+// ---------- render ----------
+function render() {
+  const hr = new Date().getHours();
+  document.getElementById('subtitle').textContent =
+    `${hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'} — ${new Date().toDateString()}`;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('app').innerHTML =
+    { today: viewToday, plan: viewPlan, week: viewWeek, settings: viewSettings }[view]();
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { view = b.dataset.view; render(); });
+setInterval(() => { if (view === 'today' && document.activeElement.tagName !== 'TEXTAREA') render(); }, 60000);
+render();
+</script>
+</body>
+</html>
